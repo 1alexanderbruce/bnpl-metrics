@@ -1,0 +1,156 @@
+# Example metric specification.
+#
+# EXAMPLECO is fictional and every number below is a placeholder chosen to demonstrate the
+# schema. Real specifications (company names, coefficients, sheet and row labels) belong in
+# config/private/, which is git-ignored.
+#
+# Source types:
+#   constant  an explicit assumption             {value}
+#   excel     a row in an uploaded spreadsheet   {file, sheet, row, aggregate: latest|sum_last_n|mean_last_n, n}
+#   filing    LLM answer over an SEC filing      {forms, question, max_age_days}
+#   pdf       LLM answer over an uploaded PDF    {file, question}
+#   catalog   value from the document catalog    {key}
+#   metric    another metric in this company     {ref}
+#
+# Sources are tried in order. A source marked `fallback: true` is only used when the sources
+# before it fail, and the result is then reported with status "fallback" (never plain "ok").
+
+companies:
+  - id: EXAMPLECO
+    name: Example Co (fictional)
+    files:
+      historical_financials: Quarterly financials spreadsheet (.xlsx) with an "Operating Metrics" sheet
+      annual_presentation: Annual investor presentation (.pdf)
+
+    # Pages listing documents to download with `bnpl-metrics fetch`. Only use pages whose terms
+    # allow automated access; robots.txt is always checked and requests are rate-limited.
+    documents:
+      - id: annual_reports
+        index_url: https://investors.example.com/reports
+        link_pattern: annual.*\.pdf
+        doc_type: annual_report
+        max_documents: 3
+
+    # Figures pulled from uploaded documents into the value catalog (`bnpl-metrics extract`),
+    # then read by `catalog` sources below.
+    extractions:
+      - key: total_assets
+        file: annual_presentation
+        question: What are the company's total assets? Give the number and its unit.
+        unit: billion AUD
+
+    metrics:
+      - name: us_gmv
+        display_name: US GMV
+        description: Trailing four quarters of global GMV, scaled by the US share of revenue.
+        unit: billion USD
+        formula: global_gmv_ttm * us_share
+        validation: {min: 0, max: 1000, max_change_ratio: 0.5}
+        inputs:
+          global_gmv_ttm:
+            unit: billion USD
+            sources:
+              - type: excel
+                file: historical_financials
+                sheet: Operating Metrics
+                row: Gross merchandise volume
+                aggregate: sum_last_n
+                n: 4
+          us_share:
+            unit: ratio
+            sources:
+              - type: filing
+                forms: [10-K]
+                max_age_days: 400
+                question: What share of total revenue comes from the United States? Answer as a percentage.
+              - type: constant
+                value: 0.5
+                fallback: true
+                reason: Illustrative placeholder used only when the filing cannot be parsed
+
+      - name: pay_in_4_gmv
+        display_name: Pay in 4 GMV
+        description: US GMV multiplied by an assumed instalment-product mix.
+        unit: billion USD
+        formula: us_gmv * pay_in_4_mix
+        validation: {min: 0, max: 1000}
+        inputs:
+          us_gmv:
+            unit: billion USD
+            sources:
+              - {type: metric, ref: us_gmv}
+          pay_in_4_mix:
+            unit: ratio
+            sources:
+              - {type: constant, value: 0.25}
+
+      - name: pay_in_4_share
+        display_name: Pay in 4 share of GMV
+        unit: percent
+        formula: pay_in_4_gmv / us_gmv * 100
+        validation: {min: 0, max: 100}
+        inputs:
+          pay_in_4_gmv:
+            unit: billion USD
+            sources:
+              - {type: metric, ref: pay_in_4_gmv}
+          us_gmv:
+            unit: billion USD
+            sources:
+              - {type: metric, ref: us_gmv}
+
+      - name: active_consumers
+        display_name: US active consumers
+        unit: million
+        formula: global_consumers * us_share
+        validation: {min: 0, max: 500}
+        inputs:
+          global_consumers:
+            unit: million
+            sources:
+              - type: pdf
+                file: annual_presentation
+                question: How many active consumers does the company report? Give the number and its unit.
+          us_share:
+            unit: ratio
+            sources:
+              - {type: metric, ref: us_share_of_revenue}
+
+      - name: us_share_of_revenue
+        display_name: US share of revenue
+        unit: ratio
+        formula: us_revenue / total_revenue
+        validation: {min: 0, max: 1}
+        inputs:
+          us_revenue:
+            unit: million USD
+            sources:
+              - type: filing
+                forms: [10-K]
+                question: What is revenue attributable to the United States, in USD?
+          total_revenue:
+            unit: million USD
+            sources:
+              - type: filing
+                forms: [10-K]
+                question: What is total revenue, in USD?
+
+      - name: total_assets_usd
+        display_name: Total assets (USD)
+        description: Reported in a local currency and converted with an explicit exchange rate.
+        unit: billion USD
+        formula: assets_local * fx_rate
+        validation: {min: 0, max: 1000}
+        inputs:
+          assets_local:
+            unit: billion AUD
+            sources:
+              - {type: catalog, key: total_assets}
+          fx_rate:
+            unit: ratio
+            sources:
+              - {type: catalog, key: fx_rate_aud_usd}
+              - type: constant
+                value: 0.65
+                fallback: true
+                reason: Illustrative placeholder rate used when no dated rate is available
