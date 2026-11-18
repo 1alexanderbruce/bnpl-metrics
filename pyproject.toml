@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bnpl-metrics"
+version = "0.1.0"
+description = "Config-driven pipeline for calculating financial metrics from SEC filings, spreadsheets and PDFs, with LLM-assisted extraction"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "pypdf>=4.0",
+    "openai>=1.30",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+gui = [
+    "gradio==3.50.2",
+    "setuptools<81",  # gradio 3.50 imports distutils, which Python 3.12 no longer ships
+]
+selenium = ["selenium>=4.20", "watchdog>=4.0"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+bnpl-metrics = "bnpl_metrics.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S110", "S112"]

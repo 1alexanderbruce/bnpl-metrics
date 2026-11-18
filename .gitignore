@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local data, caches and results: never commit
+data/
+index/
+output/
+logs/
+cache/
+config/private/
+*_cache*.json
+*.pdf
+*.xlsx
+*.xls
+*.csv
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
